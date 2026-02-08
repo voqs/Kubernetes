@@ -3,7 +3,7 @@ run-name: Kubernetes Terraform 🚀
 on: [push]
 jobs:
   First:
-    runs-on: hetzner
+    runs-on: self-hosted
     env:
       KEY: ${{ secrets.KEY }}
     steps:
