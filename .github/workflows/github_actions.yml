@@ -3,11 +3,11 @@ run-name: Kubernetes Terraform 🚀
 on: [push]
 jobs:
   First:
-    runs-on: self-hosted
-    env:
-      KEY: ${{ secrets.KEY }}
+    runs-on: k8s-cluster-runner
+    #env:
+    #  KEY: ${{ secrets.KEY }}
     steps:
-      - run: echo "$KEY"
+      - run: echo "test"
       - uses: actions/checkout@v2
       - run: terraform init
       - run: terraform plan -var access_key="$KEY"
