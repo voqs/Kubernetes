@@ -1,0 +1,148 @@
+# Immich Tailscale Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: immich
+  namespace: immich
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - immich
+  defaultBackend:
+    service:
+      name: immich-server
+      port:
+        number: 2283
+
+# Immich photo volume
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-photos
+  namespace: immich
+  labels:
+    app: immich
+    backup: "true"
+spec:
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+
+# Immich Postgress Database Secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-immich
+  namespace: immich
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: <REDACTED>
+  POSTGRES_USER: <REDACTED>
+  POSTGRES_DB: <REDACTED>
+
+# Immich Postgress Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-immich
+  namespace: immich
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-immich
+
+# Immich Postgress Database Stateful Set
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-immich
+  namespace: immich
+spec:
+  serviceName: postgres-immich
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-immich
+  template:
+    metadata:
+      labels:
+        app: postgres-immich
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: tensorchord/vchord-postgres:pg18-v1.1.1
+          args:
+            - postgres
+            - -c
+            - shared_preload_libraries=vchord.so
+            - -c
+            - effective_io_concurrency=200
+            - -c
+            - timezone=Europe/Gibraltar
+          envFrom:
+            - secretRef:
+                name: postgres-immich
+          env:
+            - name: POSTGRES_INITDB_ARGS
+              value: --data-checksums
+            - name: TZ
+              value: <REDACTED>
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/18/docker
+            - name: shm
+              mountPath: /dev/shm
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "immich"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 1Gi
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          backup: "true"
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 20Gi
+
+# TO-DO
+# Immich Helm Chart
+helmCharts:
+- name: chart-name
+  repo: https://charts.example.com
+  version: 1.2.3
+  releaseName: my-release
+  namespace: my-ns
+  valuesFile: values.yaml
+  valuesInline:
+    key: value
+  includeCRDs: true

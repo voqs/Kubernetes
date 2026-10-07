@@ -1,0 +1,109 @@
+# Navidrome Tailscale Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: navidrome
+  namespace: navidrome
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - navidrome
+  defaultBackend:
+    service:
+      name: navidrome
+      port:
+        number: 4533
+
+# Navidrome Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: navidrome
+  namespace: navidrome
+  labels:
+    app: navidrome
+spec:
+  selector:
+    app: navidrome
+  ports:
+  - name: http
+    port: 4533
+    targetPort: 4533
+
+# Navidrome Statefulset
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: navidrome
+  namespace: navidrome
+spec:
+  serviceName: navidrome
+  replicas: 1
+  selector:
+    matchLabels:
+      app: navidrome
+  template:
+    metadata:
+      labels:
+        app: navidrome
+    spec:
+      containers:
+      - name: navidrome
+        image: deluan/navidrome:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 4533
+        env:
+        - name: ND_SCANSCHEDULE
+          value: 1h
+        - name: ND_LOGLEVEL
+          value: debug
+        - name: ND_SESSIONTIMEOUT
+          value: 24h
+        - name: ND_TRANSCODING_ENABLECANCELLATION
+          value: "true"
+        - name: ND_PROMETHEUS_ENABLED
+          value: "true"
+        - name: ND_TRANSCODING_MAXCONCURRENT
+          value: "100"
+        - name: ND_TRANSCODING_MAXCONCURRENTPERUSER
+          value: "100"
+        - name: ND_TRANSCODINGCACHESIZE
+          value: 3072MB
+        - name: ND_BACKUP_PATH
+          value: /data/backup
+        - name: ND_BACKUP_SCHEDULE
+          value: "0 3 * * *"
+        - name: ND_BACKUP_COUNT
+          value: "7"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: music
+          mountPath: /music
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        backup: "true"
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 5Gi
+  - metadata:
+      name: music
+      labels:
+        backup: "true"
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 100Gi

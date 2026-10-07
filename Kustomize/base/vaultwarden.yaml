@@ -1,0 +1,93 @@
+# VaultWarden Volume
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vaultwarden-vault
+  namespace: vaultwarden
+spec:
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+# VaultWarden Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: vaultwarden
+  name: vaultwarden
+  namespace: vaultwarden
+spec:
+  ports:
+  - name: vaultwarden
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: vaultwarden
+  type: ClusterIP
+
+# VaultWarden Deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vaultwarden
+  namespace: vaultwarden
+  labels:
+    app: vaultwarden
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vaultwarden
+  template:
+    metadata:
+      labels:
+        app: vaultwarden
+    spec:
+      containers:
+      - name: vaultwarden
+        image: vaultwarden/server:latest
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: ADMIN_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: vaultwarden-config
+              key: ADMIN_TOKEN
+        - name: SIGNUPS_ALLOWED
+          value: "false"
+        - name: DOMAIN
+          valueFrom:
+            secretKeyRef:
+              name: vaultwarden-config
+              key: DOMAIN
+        - name: DATA_FOLDER
+          value: "/data"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: vaultwarden-vault

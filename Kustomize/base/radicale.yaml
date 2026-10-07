@@ -1,0 +1,100 @@
+# Radicale Tailscale Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: radicale
+  namespace: dav
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - radicale
+  defaultBackend:
+    service:
+      name: radicale
+      port:
+        number: 5232
+
+# Radicale Volume
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: radicale
+  namespace: dav
+  labels:
+    app: "radicale"
+    backup: "true"
+spec:
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+# Radicale Config
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: radicale
+  namespace: dav
+stringData:
+  config: |
+    [server]
+    hosts = 0.0.0.0:5232
+    [auth]
+    type = htpasswd
+    htpasswd_filename = /etc/radicale/users
+    htpasswd_encryption = bcrypt
+    [storage]
+    filesystem_folder = /data/collections
+    [rights]
+    type = owner_only
+  users: |
+    voqs:<REDACTED>
+    # Create the above with "htpasswd -nbB voqs '<PASSWORD>'"
+
+# Radicale Deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radicale
+  namespace: dav
+  labels:
+    app: radicale
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radicale
+  template:
+    metadata:
+      labels:
+        app: radicale
+    spec:
+      containers:
+      - name: radicale
+        image: kozea/radicale:latest
+        ports:
+        - name: http
+          containerPort: 5232
+        env:
+        - name: RADICALE_CONFIG
+          value: /etc/radicale/config
+        volumeMounts:
+        - name: config
+          mountPath: /etc/radicale
+          readOnly: true
+        - name: dav-data
+          mountPath: /data
+      volumes:
+      - name: config
+        secret:
+          secretName: radicale
+      - name: dav-data
+        persistentVolumeClaim:
+          claimName: radicale

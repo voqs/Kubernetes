@@ -1,0 +1,83 @@
+# OtterWiki Tailscale Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: otterwiki
+  namespace: wiki
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - otterwiki
+  defaultBackend:
+    service:
+      name: otterwiki
+      port:
+        number: 80
+
+# OtterWiki Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: otterwiki
+  name: otterwiki
+  namespace: wiki
+spec:
+  ports:
+  - name: otterwiki
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: otterwiki
+  type: ClusterIP
+
+# OtterWiki Stateful Set
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: otterwiki
+  namespace: wiki
+spec:
+  selector:
+    matchLabels:
+      app: otterwiki
+  serviceName: "otterwiki"
+  replicas: 1
+  minReadySeconds: 1
+  template:
+    metadata:
+      labels:
+        app: otterwiki
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+      - name: otterwiki
+        env:
+        - name: READ_ACCESS
+          value: REGISTERED
+        - name: WRITE_ACCESS
+          value: REGISTERED
+        - name: ATTACHMENT_ACCESS
+          value: APPROVED
+        - name: DISABLE_REGISTRATION
+          value: "True"
+        image: redimp/otterwiki:latest
+        volumeMounts:
+        - name: database
+          mountPath: /app-data
+  volumeClaimTemplates:
+  - metadata:
+      name: database
+      labels:
+        backup: "true"
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "local-path"
+      resources:
+        requests:
+          storage: 1Gi
