@@ -33,15 +33,46 @@ spec:
     port: 4533
     targetPort: 4533
 
-# Navidrome Statefulset
+# Navidrome Volumes
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: navidrome-data
+  namespace: navidrome
+  labels:
+    backup: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: navidrome-music
+  namespace: navidrome
+  labels:
+    backup: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: local-path
+
+# Navidrome Deployment 
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: navidrome
   namespace: navidrome
 spec:
-  serviceName: navidrome
   replicas: 1
   selector:
     matchLabels:
@@ -56,15 +87,15 @@ spec:
         image: deluan/navidrome:latest
         imagePullPolicy: Always
         ports:
-        - name: http
-          containerPort: 4533
+        - containerPort: 4533
+          name: http
         env:
         - name: ND_SCANSCHEDULE
-          value: 1h
+          value: "1h"
         - name: ND_LOGLEVEL
-          value: debug
+          value: "debug"
         - name: ND_SESSIONTIMEOUT
-          value: 24h
+          value: "24h"
         - name: ND_TRANSCODING_ENABLECANCELLATION
           value: "true"
         - name: ND_PROMETHEUS_ENABLED
@@ -74,9 +105,9 @@ spec:
         - name: ND_TRANSCODING_MAXCONCURRENTPERUSER
           value: "100"
         - name: ND_TRANSCODINGCACHESIZE
-          value: 3072MB
+          value: "3072MB"
         - name: ND_BACKUP_PATH
-          value: /data/backup
+          value: "/data/backup"
         - name: ND_BACKUP_SCHEDULE
           value: "0 3 * * *"
         - name: ND_BACKUP_COUNT
@@ -86,24 +117,10 @@ spec:
           mountPath: /data
         - name: music
           mountPath: /music
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-      labels:
-        backup: "true"
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      storageClassName: local-path
-      resources:
-        requests:
-          storage: 5Gi
-  - metadata:
-      name: music
-      labels:
-        backup: "true"
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      storageClassName: local-path
-      resources:
-        requests:
-          storage: 100Gi
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: navidrome-data
+      - name: music
+        persistentVolumeClaim:
+          claimName: navidrome-music

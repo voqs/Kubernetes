@@ -35,20 +35,36 @@ spec:
     app: otterwiki
   type: ClusterIP
 
-# OtterWiki Stateful Set
+# OtterWiki Volume
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: otterwiki-database
+  namespace: wiki
+  labels:
+    backup: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+
+# OtterWiki Deployment
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: otterwiki
   namespace: wiki
 spec:
+  replicas: 1
+  minReadySeconds: 1
   selector:
     matchLabels:
       app: otterwiki
-  serviceName: "otterwiki"
-  replicas: 1
-  minReadySeconds: 1
   template:
     metadata:
       labels:
@@ -57,27 +73,20 @@ spec:
       terminationGracePeriodSeconds: 1
       containers:
       - name: otterwiki
+        image: redimp/otterwiki:latest
         env:
         - name: READ_ACCESS
           value: REGISTERED
         - name: WRITE_ACCESS
           value: REGISTERED
         - name: ATTACHMENT_ACCESS
-          value: APPROVED
+          value: REGISTERED
         - name: DISABLE_REGISTRATION
           value: "True"
-        image: redimp/otterwiki:latest
         volumeMounts:
         - name: database
           mountPath: /app-data
-  volumeClaimTemplates:
-  - metadata:
-      name: database
-      labels:
-        backup: "true"
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      storageClassName: "local-path"
-      resources:
-        requests:
-          storage: 1Gi
+      volumes:
+      - name: database
+        persistentVolumeClaim:
+          claimName: otterwiki-database
