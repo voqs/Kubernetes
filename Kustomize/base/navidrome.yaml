@@ -101,9 +101,9 @@ spec:
         - name: ND_PROMETHEUS_ENABLED
           value: "true"
         - name: ND_TRANSCODING_MAXCONCURRENT
-          value: "100"
+          value: "50"
         - name: ND_TRANSCODING_MAXCONCURRENTPERUSER
-          value: "100"
+          value: "5"
         - name: ND_TRANSCODINGCACHESIZE
           value: "3072MB"
         - name: ND_BACKUP_PATH
