@@ -126,7 +126,7 @@ spec:
     - metadata:
         name: data
         labels:
-          backup: "true"
+          backup: "false"
       spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: local-path
