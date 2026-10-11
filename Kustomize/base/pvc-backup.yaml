@@ -1,0 +1,111 @@
+# PVC-Backup Service Account
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-sa
+  namespace: backups
+
+# PVC-Backup Cluster Role
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backup-role
+rules:
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["persistentvolumes"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/scale"]
+  verbs: ["get", "list", "patch"]
+
+# PVC-Backup Cluster Role Binding
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backup-binding
+subjects:
+- kind: ServiceAccount
+  name: backup-sa
+  namespace: backups
+roleRef:
+  kind: ClusterRole
+  name: backup-role
+  apiGroup: rbac.authorization.k8s.io
+
+# PVC-Backup CronJob
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pvc-backup
+  namespace: backups
+spec:
+  schedule: "0 3 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: backup-sa
+          restartPolicy: Never
+          containers:
+          - name: backup
+            image: rclone/rclone:1.73
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              apk add -q --no-cache python3 py3-pip
+              pip install kubernetes --break-system-packages --quiet
+
+              python3 -u - << 'EOF'
+              from time import sleep
+              from sys import stdout, stderr
+              from kubernetes import client, config
+              from subprocess import run
+
+              config.load_incluster_config()
+              v1, apps = client.CoreV1Api(), client.AppsV1Api()
+
+              for pvc in v1.list_persistent_volume_claim_for_all_namespaces(label_selector="backup=true").items:
+                  name, pv = pvc.metadata.name, pvc.spec.volume_name
+
+                  targets = [
+                      (d.metadata.namespace, d.metadata.name)
+                      for d in apps.list_deployment_for_all_namespaces().items
+                      if any(v.persistent_volume_claim and v.persistent_volume_claim.claim_name == name
+                             for v in (d.spec.template.spec.volumes or []))
+                  ]
+
+                  print("\n[INFO] Processing PVC %s .." %(name))
+
+                  for ns, dep in targets:
+                      print("[INFO] Scaling down %s/%s" %(ns, dep))
+                      apps.patch_namespaced_deployment_scale(dep, ns, {"spec": {"replicas": 0}})
+                  sleep(15)
+
+                  path = v1.read_persistent_volume(pv).spec.local.path
+                  print("[INFO] Backing up %s to Filen.." %(path))
+                  run(["rclone", "sync", path, f"filen:backups/{name}", "--stats", "10s", "--stats-one-line"], check=True, stdout=stdout, stderr=stderr)
+                  print("[SUCCESS] Backup Complete of %s" %(path))
+
+                  for ns, dep in targets:
+                      print("[INFO] Scaling up %s/%s" %(ns, dep))
+                      apps.patch_namespaced_deployment_scale(dep, ns, {"spec": {"replicas": 1}})
+              EOF
+            envFrom:
+            - secretRef:
+                name: rclone
+            volumeMounts:
+            - name: storage
+              mountPath: /var/lib/rancher/k3s/storage
+          volumes:
+          - name: storage
+            hostPath:
+              path: /var/lib/rancher/k3s/storage

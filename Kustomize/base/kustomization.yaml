@@ -6,3 +6,4 @@ resources:
   - otterwiki.yaml
   - radicale.yaml
   - vaultwarden.yaml
+  - pvc-backup.yaml

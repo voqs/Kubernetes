@@ -41,7 +41,7 @@ metadata:
   name: navidrome-data
   namespace: navidrome
   labels:
-    backup: "true"
+    backup: "false"
 spec:
   accessModes:
     - ReadWriteOnce

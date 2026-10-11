@@ -5,6 +5,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: vaultwarden-vault
   namespace: vaultwarden
+  labels:
+    backup: "false"
 spec:
   storageClassName: "local-path"
   accessModes:
