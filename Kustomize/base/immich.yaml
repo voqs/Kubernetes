@@ -142,7 +142,7 @@ helmCharts:
   version: 1.2.3
   releaseName: my-release
   namespace: my-ns
-  valuesFile: values.yaml
+  valuesFile: immich-values.yaml
   valuesInline:
     key: value
   includeCRDs: true

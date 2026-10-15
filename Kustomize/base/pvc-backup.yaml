@@ -92,7 +92,7 @@ spec:
 
                   path = v1.read_persistent_volume(pv).spec.local.path
                   print("[INFO] Backing up %s to Filen.." %(path))
-                  run(["rclone", "sync", path, f"filen:backups/{name}", "--stats", "10s", "--stats-one-line"], check=True, stdout=stdout, stderr=stderr)
+                  run(["rclone", "sync", path, f"filen:backups/{name}", "--filter", "- encoded-video/**", "--filter", "- thumbs/**", "-v", "--stats", "10s", "--stats-one-line"], check=True, stdout=stdout, stderr=stderr)
                   print("[SUCCESS] Backup Complete of %s" %(path))
 
                   for ns, dep in targets:

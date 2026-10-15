@@ -1,0 +1,109 @@
+controllers:
+  main:
+    pod:
+      securityContext:
+        fsGroup: 1000
+    containers:
+      main:
+        image:
+          tag: v3.2.0
+        env:
+          REDIS_HOSTNAME: '{{ printf "%s-valkey" .Release.Name }}'
+          IMMICH_MACHINE_LEARNING_URL: '{{ printf "http://%s-machine-learning:3003" .Release.Name }}'
+          DB_HOSTNAME: postgres-immich
+          DB_PORT: "5432"
+          DB_DATABASE_NAME: immich
+          DB_USERNAME:
+            valueFrom:
+              secretKeyRef:
+                name: postgres-immich
+                key: POSTGRES_USER
+          DB_PASSWORD:
+            valueFrom:
+              secretKeyRef:
+                name: postgres-immich
+                key: POSTGRES_PASSWORD
+
+immich:
+  metrics:
+    # Enabling this will create the service monitors needed to monitor immich with the prometheus operator
+    enabled: false
+  persistence:
+    # Main data store for all photos shared between different components.
+    library:
+      # You have to specify an existing PVC to use
+      existingClaim: immich-photos
+  configuration: 
+    backup:
+      database:
+        enabled: true
+        cronExpression: "0 2 * * *"
+        keepLastAmount: 7
+    trash:
+      enabled: true
+      days: 31
+    storageTemplate:
+      enabled: true
+      template: "{{#if album}}{{{album}}}{{else}}Other{{/if}}/{{filename}}"
+  # Sets the resource Kind to store configuration in. Must be either ConfigMap or Secret.
+  configurationKind: ConfigMap
+
+
+# Dependencies
+valkey:
+  enabled: True
+  controllers:
+    main:
+      containers:
+        main:
+          image:
+            repository: docker.io/valkey/valkey
+            tag: 9.1-alpine@sha256:a35428eba9043cc0b79dbe54100f0c92784f2de00ad09b01182bfb1c5c83d1bd
+            pullPolicy: IfNotPresent
+  persistence:
+    data:
+      enabled: true
+      type: emptyDir
+
+
+# Immich components
+server:
+  enabled: true
+  controllers:
+    main:
+      containers:
+        main:
+          image:
+            repository: ghcr.io/immich-app/immich-server
+            pullPolicy: IfNotPresent
+  ingress:
+    main:
+      enabled: false
+      annotations:
+        # proxy-body-size is set to 0 to remove the body limit on file uploads
+        nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      hosts:
+        - host: immich.local
+          paths:
+            - path: "/"
+              service:
+                identifier: main
+      tls: []
+
+machine-learning:
+  enabled: true
+  controllers:
+    main:
+      containers:
+        main:
+          image:
+            repository: ghcr.io/immich-app/immich-machine-learning
+            pullPolicy: IfNotPresent
+          env:
+            TRANSFORMERS_CACHE: /cache
+            HF_XET_CACHE: /cache/huggingface-xet
+            MPLCONFIGDIR: /cache/matplotlib-config
+  persistence:
+    cache:
+      enabled: true
+      type: emptyDir
