@@ -16,6 +16,24 @@ spec:
       port:
         number: 4533
 
+# Navidrome webdav Tailscale Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: webdav-music
+  namespace: navidrome
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - navidrome-webdav
+  defaultBackend:
+    service:
+      name: navidrome-webdav
+      port:
+        number: 8080
+
 # Navidrome Service
 ---
 apiVersion: v1
@@ -32,6 +50,23 @@ spec:
   - name: http
     port: 4533
     targetPort: 4533
+
+# Navidrome webdav Service
+---
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: navidrome-webdav
+    namespace: navidrome
+    labels:
+      app: navidrome
+  spec:
+    selector:
+      app: navidrome
+    ports:
+    - name: 8080-8080
+      port: 8080
+      targetPort: 8080
 
 # Navidrome Volumes
 ---
@@ -115,6 +150,24 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
+        - name: music
+          mountPath: /music
+      - name: webdav
+        image: rclone/rclone:latest
+        args:
+        - "serve"
+        - "webdav"
+        - "/music"
+        - "--addr"
+        - "0.0.0.0:8080"
+        - "--user"
+        - "voqs"
+        - "--pass"
+        - "Changeme123"
+        envFrom:
+        - secretRef:
+            name: rclone
+        volumeMounts:
         - name: music
           mountPath: /music
       volumes:
