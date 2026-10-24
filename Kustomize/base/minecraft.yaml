@@ -1,0 +1,76 @@
+# minecraft Service (Expose over L3 instead of L7 via an Ingress)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: minecraft
+  name: minecraft
+  namespace: minecraft
+  annotations:
+    tailscale.com/expose: "true"
+spec:
+  ports:
+  - name: minecraft
+    port: 25565
+    protocol: TCP
+    targetPort: 25565
+  selector:
+    app: minecraft
+  type: ClusterIP
+
+# minecraft Volume
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minecraft-world
+  namespace: minecraft
+  labels:
+    backup: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+
+# minecraft Deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft
+  namespace: minecraft
+spec:
+  replicas: 1
+  minReadySeconds: 1
+  selector:
+    matchLabels:
+      app: minecraft
+  template:
+    metadata:
+      labels:
+        app: minecraft
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+      - name: minecraft
+        image: redimp/minecraft:latest
+        env:
+        - name: EULA
+          value: "TRUE"
+        - name: MEMORY
+          value: 4G
+        - name: DIFFICULTY
+          value: hard
+        - name: MODE
+          value: survival
+        volumeMounts:
+        - name: world
+          mountPath: /data
+      volumes:
+      - name: world
+        persistentVolumeClaim:
+          claimName: minecraft-world
